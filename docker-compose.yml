@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build:
+      context: ./api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT_GATEWAY=8000
+      - USER_SERVICE_URL=http://user-service:3001
+      - PRODUCT_SERVICE_URL=http://product-service:3002
+      - ORDER_SERVICE_URL=http://order-service:3003
+      - JWT_SECRET=super_secret_jwt_key_for_this_project_123
+    depends_on:
+      - user-service
+      - product-service
+      - order-service
+
+  user-service:
+    build:
+      context: ./user-service
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT_USER=3001
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=super_secret_jwt_key_for_this_project_123
+      - REFRESH_TOKEN_SECRET=super_secret_refresh_key_123
+
+  product-service:
+    build:
+      context: ./product-service
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT_PRODUCT=3002
+      - MONGODB_URI=${MONGODB_URI}
+
+  order-service:
+    build:
+      context: ./order-service
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT_ORDER=3003
+      - MONGODB_URI=${MONGODB_URI}
+      - PRODUCT_SERVICE_URL=http://product-service:3002
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"

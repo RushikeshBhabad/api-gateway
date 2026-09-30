@@ -1,0 +1,3 @@
+Yes, Rate Limiting is based on IP Address (127.0.0.1): In rateLimitMiddleware.ts, the rate limiter tracks client IPs. Because you are testing everything locally on your machine, all browser requests and terminal requests share the exact same IP: 127.0.0.1.
+
+Window Accumulation: When previous automated tests or rapid clicks occurred within the 60-second sliding window, 127.0.0.1 accumulated requests. Even if you typed a new email into the form, the Gateway saw that the request originated from 127.0.0.1 and blocked it until the window cleared. 

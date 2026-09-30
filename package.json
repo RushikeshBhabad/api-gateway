@@ -1,0 +1,12 @@
+{
+  "name": "bookstore-microservices-root",
+  "version": "1.0.0",
+  "description": "Root control scripts for Bookstore Microservices with API Gateway",
+  "scripts": {
+    "start": "./start.sh",
+    "stop": "./stop.sh",
+    "restart": "./start.sh",
+    "status": "./status.sh",
+    "test:rate-limit": "./test-ratelimit.sh"
+  }
+}
