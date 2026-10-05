@@ -75,12 +75,13 @@ async function main() {
   };
 
   for (let i = 1; i <= numRequests; i++) {
-    const res = await sendRequest(url, key, strategy);
+    const requestKey = (key === 'MULTI' || key === 'DISTRIBUTED') ? `user-${i}` : key;
+    const res = await sendRequest(url, requestKey, strategy);
     
     if (res.success) {
       results.success++;
       results.instances[res.instance] = (results.instances[res.instance] || 0) + 1;
-      let displayKey = key ? `${key} → ` : `Request ${i} → `;
+      let displayKey = requestKey ? `${requestKey} → ` : `Request ${i} → `;
       console.log(`${displayKey}${res.instance}   ✓ (Strategy: ${res.strategy})`);
     } else {
       results.failed++;

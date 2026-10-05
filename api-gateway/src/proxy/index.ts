@@ -18,10 +18,13 @@ export const setupProxies = (app: Application) => {
           throw new Error(`No healthy instances available for ${serviceName}`);
         }
         
+        const rawUserId = (req as any).user?.id || req.headers['x-user-id'] || req.headers['x-user'];
+        const userId = Array.isArray(rawUserId) ? rawUserId[0] : (rawUserId ? String(rawUserId) : undefined);
+
         const context = {
           req,
           clientIp: req.ip || req.socket.remoteAddress,
-          userId: (req as any).user?.id, // Assuming authMiddleware sets req.user
+          userId,
           requestPath: req.originalUrl,
         };
 
@@ -32,6 +35,22 @@ export const setupProxies = (app: Application) => {
         // Expose instance info on request for proxyRes/error hooks
         (req as any)._lbService = serviceName;
         (req as any)._lbInstance = selectedInstance;
+        (req as any)._lbCompleted = false;
+
+        const completeRequest = () => {
+          if ((req as any)._lbCompleted) return;
+          (req as any)._lbCompleted = true;
+          if (lbStrategy.onRequestComplete && (req as any)._lbService && (req as any)._lbInstance) {
+            lbStrategy.onRequestComplete((req as any)._lbService, (req as any)._lbInstance);
+          }
+        };
+
+        // Attach completion hooks to response
+        const res = (req as any).res;
+        if (res) {
+          res.once('finish', completeRequest);
+          res.once('close', completeRequest);
+        }
 
         return selectedInstance.url;
       },
@@ -46,7 +65,6 @@ export const setupProxies = (app: Application) => {
         },
         proxyRes: (proxyRes, req, res) => {
           const instance = (req as any)._lbInstance;
-          const serviceName = (req as any)._lbService;
           
           if (instance) {
             res.setHeader('x-upstream-instance', instance.id);
@@ -54,18 +72,27 @@ export const setupProxies = (app: Application) => {
             res.setHeader('x-lb-strategy', lbStrategy.name);
           }
 
-          // Trigger request completion hook (useful for Least Connections)
-          if (lbStrategy.onRequestComplete && serviceName && instance) {
-            lbStrategy.onRequestComplete(serviceName, instance);
-          }
+          const completeRequest = () => {
+            if ((req as any)._lbCompleted) return;
+            (req as any)._lbCompleted = true;
+            if (lbStrategy.onRequestComplete && (req as any)._lbService && (req as any)._lbInstance) {
+              lbStrategy.onRequestComplete((req as any)._lbService, (req as any)._lbInstance);
+            }
+          };
+
+          // Trigger completion when proxy response stream ends or closes
+          proxyRes.once('end', completeRequest);
+          proxyRes.once('close', completeRequest);
         },
         error: (err, req, res) => {
           const instance = (req as any)._lbInstance;
           const serviceName = (req as any)._lbService;
 
-          // Trigger request completion hook on error too
-          if (lbStrategy.onRequestComplete && serviceName && instance) {
-            lbStrategy.onRequestComplete(serviceName, instance);
+          if (!(req as any)._lbCompleted) {
+            (req as any)._lbCompleted = true;
+            if (lbStrategy.onRequestComplete && serviceName && instance) {
+              lbStrategy.onRequestComplete(serviceName, instance);
+            }
           }
           
           console.error(`[Proxy Error] ${serviceName} / ${instance?.url || 'unknown'} : ${err.message}`);

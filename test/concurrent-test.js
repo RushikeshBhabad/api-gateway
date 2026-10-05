@@ -1,10 +1,16 @@
 const http = require('http');
 
-async function sendRequest(url) {
+async function sendRequest(url, key, strategy) {
   return new Promise((resolve) => {
     const start = Date.now();
-    const req = http.request(url, (res) => {
+    const headers = {};
+    if (key) {
+      headers['X-User-Id'] = key;
+    }
+
+    const req = http.request(url, { headers }, (res) => {
       let instance = res.headers['x-upstream-instance'] || res.headers['x-service-instance'] || 'unknown';
+      let strategyUsed = res.headers['x-lb-strategy'] || 'unknown';
       
       res.on('data', () => {}); // Consume body
       res.on('end', () => {
@@ -12,6 +18,7 @@ async function sendRequest(url) {
           success: res.statusCode >= 200 && res.statusCode < 400,
           status: res.statusCode,
           instance,
+          strategy: strategyUsed,
           time: Date.now() - start
         });
       });
@@ -20,8 +27,9 @@ async function sendRequest(url) {
     req.on('error', (err) => {
       resolve({
         success: false,
-        error: err.message,
+        error: err.message || err.code || String(err),
         instance: 'failed',
+        strategy: 'unknown',
         time: Date.now() - start
       });
     });
@@ -34,12 +42,14 @@ async function main() {
   const args = process.argv.slice(2);
   
   if (args.length < 2) {
-    console.log("Usage: node concurrent-test.js <service> <num_requests>");
+    console.log("Usage: node concurrent-test.js <service> <num_requests> [STRATEGY] [key]");
     process.exit(1);
   }
 
   const serviceType = args[0].toLowerCase();
   const numRequests = parseInt(args[1], 10);
+  const strategy = args[2] || 'LEAST_CONNECTIONS';
+  const key = args[3];
 
   const paths = {
     'user': '/api/users',
@@ -62,7 +72,8 @@ async function main() {
   const globalStart = Date.now();
 
   for (let i = 1; i <= numRequests; i++) {
-    promises.push(sendRequest(url).then(res => {
+    const requestKey = (key === 'MULTI' || key === 'DISTRIBUTED') ? `user-${i}` : key;
+    promises.push(sendRequest(url, requestKey, strategy).then(res => {
       if (res.success) {
         results.success++;
         results.instances[res.instance] = (results.instances[res.instance] || 0) + 1;
