@@ -9,6 +9,8 @@ export interface ServiceInstance {
   weight: number;            // default 1, used for Weighted RR
   activeConnections: number; // tracked for Least Connections
   healthy: boolean;          // health status
+  lastHeartbeat?: number;    // timestamp ms of last received heartbeat
+  registeredAt?: number;     // timestamp ms when instance was registered
 }
 
 /**

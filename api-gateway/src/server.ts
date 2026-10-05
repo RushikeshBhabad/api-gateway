@@ -36,11 +36,17 @@ import { rateLimiter } from './ratelimit/rateLimitMiddleware';
 import { TokenBucketStrategy } from './ratelimit/TokenBucketStrategy';
 import { SlidingWindowStrategy } from './ratelimit/SlidingWindowStrategy';
 import { FixedWindowStrategy } from './ratelimit/FixedWindowStrategy';
+import { registryRouter } from './registry/registryRoutes';
 
 /**
  * Route: Basic health check endpoint.
  */
 app.get('/health', (req, res) => res.status(200).json({ status: 'GATEWAY_UP' }));
+
+// --- Service Discovery & Registration API ---
+// Mounted before auth middleware so microservices can self-register on boot
+app.use('/registry', registryRouter);
+app.use('/api/registry', registryRouter);
 
 // --- Apply Dynamic Strategy Rate Limiting ---
 // You can seamlessly swap these algorithms dynamically based on your preference!

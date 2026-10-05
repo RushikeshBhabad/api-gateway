@@ -400,3 +400,196 @@ In real-world production environments, **modern cloud platforms automate this fo
 #### Why Having This in the API Gateway Still Matters:
 - **Application-Level Routing:** Cloud load balancers usually only do simple round-robin. In-gateway load balancing allows advanced strategies like **Consistent Hashing** (routing the same user to the same cache-warmed node) or **Least Connections**.
 - **Service Mesh & Microservices:** It allows microservices inside your internal private network to load-balance between each other without needing an expensive cloud load balancer for every individual internal service.
+
+
+
+Viewed ecosystem.config.cjs:1-40
+Viewed start.sh:1-44
+Viewed package.json:1-33
+
+### 1. Why PM2? What does it do apart from just starting services?
+
+While a simple bash command or `npm start` can launch a Node process, **PM2** is a production-grade **Process Manager**. In a microservices architecture with multiple separate services, PM2 provides critical capabilities beyond just executing a script:
+
+1. **Background Daemonizing (No Cluttered Terminals)**:
+   - Without PM2, launching 5 services would require keeping 5 separate terminal tabs or windows open. Closing a terminal would kill that service.
+   - PM2 detaches the processes into background system daemons so they keep running independently.
+
+2. **Automatic Crash Recovery & Self-Healing**:
+   - In standard Node.js, an unhandled exception or crash terminates the process permanently.
+   - PM2 automatically monitors PID health and **restarts a crashed service within milliseconds**, preventing downtime.
+
+3. **Centralized Log Streaming & Aggregation**:
+   - Rather than logs getting lost or printed into random terminal screens, PM2 pipes all `stdout` and `stderr` to structured log files (`~/.pm2/logs/`).
+   - You can inspect real-time logs across all services or for a single service:
+     ```bash
+     npx pm2 logs              # Stream all service logs simultaneously
+     npx pm2 logs api-gateway  # Stream only gateway logs
+     ```
+
+4. **Resource Monitoring & Health Metrics**:
+   - PM2 tracks real-time CPU consumption, RAM usage, process uptime, and restart frequency:
+     ```bash
+     npx pm2 list    # Table view of all microservices
+     npx pm2 monit   # Interactive terminal dashboard for memory/CPU
+     ```
+
+5. **Single-Command Lifecycle Management**:
+   - Instead of tracking down process PIDs to kill or restart (`kill -9 $(lsof -t -i:8000)`), you manage everything via declarative config in [`ecosystem.config.cjs`](file:///home/bumblebee/apigateway/ecosystem.config.cjs):
+     ```bash
+     npx pm2 restart api-gateway   # Quick restart after code change
+     ./stop.sh                     # Stops and clears all services cleanly
+     ```
+
+---
+
+### 2. How to Start Each Service Manually (Without PM2)
+
+If you are actively debugging, want to see `console.log` directly in individual terminals, or simply don't want PM2 running:
+
+> [!IMPORTANT]
+> If PM2 is currently running, stop it first to free up the ports:
+> ```bash
+> ./stop.sh
+> # or: npx pm2 delete all
+> ```
+
+Make sure MongoDB is running locally (`mongod`), then open **5 separate terminal tabs** in `/home/bumblebee/apigateway`:
+
+#### **Terminal 1: User Service** (Port 3001)
+```bash
+cd /home/bumblebee/apigateway/user-service
+npm start
+```
+
+#### **Terminal 2: Product Service** (Port 3002)
+```bash
+cd /home/bumblebee/apigateway/product-service
+npm start
+```
+
+#### **Terminal 3: Order Service** (Port 3003)
+```bash
+cd /home/bumblebee/apigateway/order-service
+npm start
+```
+
+#### **Terminal 4: API Gateway** (Port 8000)
+```bash
+cd /home/bumblebee/apigateway/api-gateway
+npm start
+```
+
+#### **Terminal 5: Frontend UI** (Port 5173)
+```bash
+cd /home/bumblebee/apigateway/frontend
+npm run dev
+```
+
+---
+
+### Summary Comparison
+
+| Task | Manual (Multi-terminal) | With PM2 |
+| :--- | :--- | :--- |
+| **Startup** | Open 5 terminals, `cd` into each, run commands | `./start.sh` (or `npx pm2 start ecosystem.config.cjs`) |
+| **On Crash** | Process dies; requires manual restart in terminal | Automatically restarts immediately |
+| **Logging** | Scattered across 5 active terminal windows | Streamed together via `npx pm2 logs` |
+| **Shutdown** | Press `Ctrl + C` in each of the 5 terminals | `./stop.sh` |
+
+
+
+
+
+Viewed server.ts:55-70
+
+You are not missing anything conceptually — your understanding of how the **60-second rate limiter window** should behave is **100% correct**. 
+
+The reason you got another 100 successful requests in the second run comes down to **process lifecycles** and **where the rate limiter stores its memory**.
+
+---
+
+### The Cause: The Gateway Restarts Between Script Runs
+
+Look at the end of [`test/test-algo.sh`](file:///home/bumblebee/apigateway/test/test-algo.sh#L54-L60):
+
+```bash
+# 3. Clean up all child processes so they don't consume memory
+echo "🧹 Cleaning up test processes..."
+npm run test:lb:stop > /dev/null 2>&1
+kill $HARNESS_PID 2>/dev/null
+```
+
+Every time you execute `./test/test-algo.sh`:
+1. It spawns **fresh** microservice processes and a **fresh API Gateway process**.
+2. It sends 200 requests.
+3. It **kills and terminates** all those processes when the script finishes.
+
+---
+
+### Where the Rate Limiter Stores Its State: RAM (`Map`)
+
+Look inside [`FixedWindowStrategy.ts`](file:///home/bumblebee/apigateway/api-gateway/src/ratelimit/FixedWindowStrategy.ts#L6):
+
+```typescript
+export class FixedWindowStrategy implements RateLimiterStrategy {
+  private limit: number;
+  private windowMs: number;
+  // 👇 Counter is stored in Node.js process RAM:
+  private counters = new Map<string, { count: number; windowStart: number }>();
+```
+
+Because the counter is stored in a JavaScript `new Map()` in process memory:
+
+```text
+Run #1:
+  1. Boot API Gateway (Process PID A) ───> Map is empty: { count: 0 }
+  2. First 100 requests              ───> count reaches 100
+  3. Next 100 requests               ───> ❌ 429 Rate Limit Exceeded
+  4. Script finishes                 ───> Process PID A is KILLED (RAM wiped)
+
+Run #2:
+  1. Boot NEW API Gateway (Process PID B) ───> Brand NEW Map: { count: 0 }
+  2. First 100 requests              ───> count reaches 100 again!
+  3. Next 100 requests               ───> ❌ 429 Rate Limit Exceeded
+  4. Script finishes                 ───> Process PID B is KILLED
+```
+
+The second Gateway process has **no memory of the previous Gateway process** because they were two completely separate OS processes!
+
+---
+
+### How to See the 300 Rejections You Expected
+
+To see your expected behavior (100 allowed, then the next 300 rejected), the **API Gateway must stay running continuously**:
+
+#### Step 1: Start the services and Gateway once
+In Terminal 1, run the test runner to keep everything alive:
+```bash
+node test/load-test.js product 20 RANDOM
+```
+*(Leave this running — do not press Ctrl+C)*
+
+#### Step 2: Fire Batch 1 (200 requests)
+In Terminal 2:
+```bash
+node test/send-requests.js product 200 RANDOM
+```
+- **Result:** 100 Succeeded, 100 Failed (429)
+
+#### Step 3: Fire Batch 2 immediately (within 60 seconds)
+In Terminal 2:
+```bash
+node test/send-requests.js product 200 RANDOM
+```
+- **Result:** **0 Succeeded, 200 Failed (429)!**
+*(Total across both batches: 100 accepted, 300 rejected, exactly as you expected)*
+
+---
+
+### Key Takeaway for System Design & Interviews
+
+| Storage Type | Behavior on Process Restart / Multi-Instance | Used in |
+|---|---|---|
+| **In-Memory (`Map`)** (Current) | Resets whenever the process restarts. If you run 2 Gateway instances, each has its own independent 100-request quota. | Local dev, single-instance services, low complexity |
+| **Distributed (Redis)** | Survives process restarts. All Gateway instances share the exact same key (`INCR ip:timestamp` with `EXPIRE 60`). | Production distributed systems |

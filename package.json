@@ -13,6 +13,7 @@
     "test:concurrent": "node test/concurrent-test.js",
     "test:circuit": "node test/circuit-breaker-test.js",
     "test:circuit-unit": "node test/circuit-breaker-unit.js",
+    "test:discovery": "node test/service-discovery-test.js",
     "demo:lb": "echo \"Run npm run test:lb -- order 10 in one terminal, and node test/send-requests.js in another.\""
   }
 }
