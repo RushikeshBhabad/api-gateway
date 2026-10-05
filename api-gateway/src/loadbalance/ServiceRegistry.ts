@@ -1,4 +1,5 @@
 import { ServiceInstance, parseInstanceConfig } from './ServiceInstance';
+import { circuitBreakerRegistry } from '../circuitbreaker/CircuitBreakerRegistry';
 
 /**
  * Manages the available service instances and tracks their health.
@@ -43,7 +44,13 @@ export class ServiceRegistry {
    * @returns An array of healthy ServiceInstances.
    */
   getInstances(serviceName: string): ServiceInstance[] {
-    return (this.services.get(serviceName) || []).filter(i => i.healthy);
+    let instances = (this.services.get(serviceName) || []).filter(i => i.healthy);
+    
+    if (circuitBreakerRegistry.isEnabled()) {
+      instances = instances.filter(i => circuitBreakerRegistry.get(i.id).canRequest());
+    }
+    
+    return instances;
   }
 
   /**

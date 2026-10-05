@@ -11,6 +11,8 @@
     "test:lb": "node test/load-test.js",
     "test:lb:stop": "pkill -f test/load-test.js || true",
     "test:concurrent": "node test/concurrent-test.js",
+    "test:circuit": "node test/circuit-breaker-test.js",
+    "test:circuit-unit": "node test/circuit-breaker-unit.js",
     "demo:lb": "echo \"Run npm run test:lb -- order 10 in one terminal, and node test/send-requests.js in another.\""
   }
 }

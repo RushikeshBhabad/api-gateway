@@ -28,6 +28,22 @@ This is a microservice-based Book Store application built with Node.js, Express,
 
 1. Run `docker compose up --build`.
 
+## Advanced Features
+
+* **Load Balancer**: Supports multiple dynamic routing strategies:
+  * `ROUND_ROBIN`, `WEIGHTED_ROUND_ROBIN`, `LEAST_CONNECTIONS`, `RANDOM`, `CONSISTENT_HASHING`.
+* **Circuit Breaker**: Resilient routing that trips (opens) on repeated failures and supports a `HALF_OPEN` state for recovery testing.
+* **Rate Limiting**: Configurable rate limits.
+
+## Testing Resiliency
+
+You can run automated tests for Load Balancing and Circuit Breakers:
+```bash
+npm run test:lb
+npm run test:circuit
+npm run test:concurrent
+```
+
 ## Future Extensions
 
-The API Gateway is designed with Strategy Patterns in `api-gateway/src/strategies`. Currently, only Authentication and Authorization strategies are implemented, but interfaces for Load Balancing and Rate Limiting are prepared for future phases.
+The API Gateway is designed with Strategy Patterns in `api-gateway/src/strategies` and `api-gateway/src/loadbalance`. Currently implemented: Authentication, Authorization, Load Balancing, and Circuit Breaking.

@@ -20,7 +20,7 @@ ALGO="RANDOM"    # <--- CHANGE THIS VALUE!
 
 SERVICE="product"      # Using 'product' service to avoid auth/rate limits
 INSTANCES=20          # Number of microservice instances to boot
-REQUESTS=60           # Number of requests to send (kept under 100 to avoid rate limit)
+REQUESTS=200           # Number of requests to send
 
 echo "======================================================"
 echo "🚀 Booting $INSTANCES instances of $SERVICE-service..."
@@ -36,7 +36,7 @@ npm run test:lb -- $SERVICE $INSTANCES $ALGO > /dev/null 2>&1 &
 HARNESS_PID=$!
 
 # Wait for the Gateway and microservices to fully boot
-sleep 10
+sleep 5
 
 echo ""
 echo "📡 Sending $REQUESTS requests..."
@@ -44,10 +44,9 @@ echo "------------------------------------------------------"
 
 # 2. Run the request generator which prints exactly what you requested
 # Example output: Request 1 → product-4001 ✓
+# If Consistent Hashing is selected, it passes a mock User ID
 if [ "$ALGO" == "CONSISTENT_HASHING" ]; then
     node test/send-requests.js $SERVICE $REQUESTS $ALGO "user-123"
-elif [ "$ALGO" == "LEAST_CONNECTIONS" ]; then
-    node test/concurrent-test.js $SERVICE $REQUESTS $ALGO
 else
     node test/send-requests.js $SERVICE $REQUESTS $ALGO
 fi

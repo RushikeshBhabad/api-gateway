@@ -13,6 +13,17 @@ app.use(express.json());
 
 app.use((req, res, next) => {
   console.log(`[product-service][${process.env.SERVICE_INSTANCE_ID || 'default'}] ${req.method} ${req.originalUrl} requestId=${req.headers['x-request-id'] || 'unknown'}`);
+  
+  // Failure injection for Circuit Breaker testing
+  if (req.query.fail === 'true' || req.headers['x-fail'] === 'true') {
+    const target = req.query.targetInstance || req.headers['x-target-instance'];
+    const currentInstance = process.env.SERVICE_INSTANCE_ID || 'default';
+    
+    if (!target || target === currentInstance) {
+      return res.status(500).json({ error: 'Injected Server Error' });
+    }
+  }
+  
   next();
 });
 

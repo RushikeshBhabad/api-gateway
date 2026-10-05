@@ -54,6 +54,10 @@ export class LeastConnectionsStrategy implements LoadBalancerStrategy {
    * @param instance - The instance that completed the request.
    */
   public onRequestComplete(serviceName: string, instance: ServiceInstance): void {
-    instance.activeConnections = Math.max(0, (instance.activeConnections || 0) - 1);
+    if (instance.activeConnections && instance.activeConnections > 0) {
+      instance.activeConnections -= 1;
+    } else {
+      instance.activeConnections = 0;
+    }
   }
 }
