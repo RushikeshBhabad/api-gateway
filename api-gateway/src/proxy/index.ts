@@ -1,37 +1,85 @@
 import { Application } from 'express';
-import { createProxyMiddleware } from 'http-proxy-middleware';
+import { createProxyMiddleware, Options } from 'http-proxy-middleware';
+import { LoadBalancerFactory } from '../loadbalance/LoadBalancerFactory';
+import { ServiceRegistry } from '../loadbalance/ServiceRegistry';
 
-/**
- * Configures reverse proxies for downstream microservices.
- * Routes traffic based on the URL path.
- * 
- * @param app - The Express application instance.
- */
 export const setupProxies = (app: Application) => {
-  // Proxy for User and Auth endpoints -> User Service
-  app.use('/api/auth', createProxyMiddleware({ 
-    target: process.env.USER_SERVICE_URL || 'http://localhost:3001', 
-    changeOrigin: true,
-    pathRewrite: (path) => path.startsWith('/auth') ? path : `/auth${path}`
-  }));
+  const serviceRegistry = new ServiceRegistry();
+  serviceRegistry.startHealthChecks();
+  const lbStrategy = LoadBalancerFactory.create();
 
-  app.use('/api/users', createProxyMiddleware({ 
-    target: process.env.USER_SERVICE_URL || 'http://localhost:3001', 
-    changeOrigin: true,
-    pathRewrite: (path) => path.startsWith('/users') ? path : `/users${path}`
-  }));
+  const createLbProxy = (serviceName: string, defaultPathRewrite: (path: string) => string): Options => {
+    return {
+      target: 'http://placeholder-target', // Will be overridden by router
+      changeOrigin: true,
+      router: (req) => {
+        const instances = serviceRegistry.getInstances(serviceName);
+        if (instances.length === 0) {
+          throw new Error(`No healthy instances available for ${serviceName}`);
+        }
+        
+        const context = {
+          req,
+          clientIp: req.ip || req.socket.remoteAddress,
+          userId: (req as any).user?.id, // Assuming authMiddleware sets req.user
+          requestPath: req.originalUrl,
+        };
 
-  // Proxy for Product endpoints -> Product Service
-  app.use('/api/products', createProxyMiddleware({ 
-    target: process.env.PRODUCT_SERVICE_URL || 'http://localhost:3002', 
-    changeOrigin: true,
-    pathRewrite: (path) => path.startsWith('/products') ? path : `/products${path}`
-  }));
+        const selectedInstance = lbStrategy.selectInstance(serviceName, instances, context);
+        
+        console.log(`[LOAD-BALANCER] strategy=${lbStrategy.name} service=${serviceName} selected=${selectedInstance.id} requestId=${(req.headers['x-request-id'] || 'unknown')}`);
+        
+        // Expose instance info on request for proxyRes/error hooks
+        (req as any)._lbService = serviceName;
+        (req as any)._lbInstance = selectedInstance;
 
-  // Proxy for Order endpoints -> Order Service
-  app.use('/api/orders', createProxyMiddleware({ 
-    target: process.env.ORDER_SERVICE_URL || 'http://localhost:3003', 
-    changeOrigin: true,
-    pathRewrite: (path) => path.startsWith('/orders') ? path : `/orders${path}`
-  }));
+        return selectedInstance.url;
+      },
+      pathRewrite: defaultPathRewrite,
+      on: {
+        proxyReq: (proxyReq, req, res) => {
+          const instance = (req as any)._lbInstance;
+          if (instance) {
+            proxyReq.setHeader('x-lb-strategy', lbStrategy.name);
+            proxyReq.setHeader('x-upstream-instance', instance.id);
+          }
+        },
+        proxyRes: (proxyRes, req, res) => {
+          const instance = (req as any)._lbInstance;
+          const serviceName = (req as any)._lbService;
+          
+          if (instance) {
+            res.setHeader('x-upstream-instance', instance.id);
+            res.setHeader('x-upstream-url', instance.url);
+            res.setHeader('x-lb-strategy', lbStrategy.name);
+          }
+
+          // Trigger request completion hook (useful for Least Connections)
+          if (lbStrategy.onRequestComplete && serviceName && instance) {
+            lbStrategy.onRequestComplete(serviceName, instance);
+          }
+        },
+        error: (err, req, res) => {
+          const instance = (req as any)._lbInstance;
+          const serviceName = (req as any)._lbService;
+
+          // Trigger request completion hook on error too
+          if (lbStrategy.onRequestComplete && serviceName && instance) {
+            lbStrategy.onRequestComplete(serviceName, instance);
+          }
+          
+          console.error(`[Proxy Error] ${serviceName} / ${instance?.url || 'unknown'} : ${err.message}`);
+          
+          if (!res.headersSent) {
+            (res as any).status(502).json({ error: 'Bad Gateway or Service Unavailable' });
+          }
+        }
+      }
+    };
+  };
+
+  app.use('/api/auth', createProxyMiddleware(createLbProxy('user-service', (path) => path.startsWith('/auth') ? path : `/auth${path}`)));
+  app.use('/api/users', createProxyMiddleware(createLbProxy('user-service', (path) => path.startsWith('/users') ? path : `/users${path}`)));
+  app.use('/api/products', createProxyMiddleware(createLbProxy('product-service', (path) => path.startsWith('/products') ? path : `/products${path}`)));
+  app.use('/api/orders', createProxyMiddleware(createLbProxy('order-service', (path) => path.startsWith('/orders') ? path : `/orders${path}`)));
 };

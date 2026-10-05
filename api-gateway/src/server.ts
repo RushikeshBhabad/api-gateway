@@ -47,11 +47,11 @@ app.get('/health', (req, res) => res.status(200).json({ status: 'GATEWAY_UP' }))
 
 // 1. Sliding Window for Auth Routes (Strict: 5 attempts per 60 seconds)
 // Prevents brute force credential stuffing at exact window boundaries
-app.use('/api/auth', rateLimiter(new SlidingWindowStrategy(20, 60000)));
+app.use('/api/auth', rateLimiter(new SlidingWindowStrategy(40, 60000)));
 
 // 2. Token Bucket for Orders (Allows bursts: 10 capacity, refills 1 token per second)
 // Perfect for checkout processes where users might click rapidly
-app.use('/api/orders', rateLimiter(new TokenBucketStrategy(11, 1)));
+app.use('/api/orders', rateLimiter(new TokenBucketStrategy(30, 1)));
 
 // 3. Fixed Window for everything else (Generic: 100 requests per 60 seconds)
 app.use('/api', rateLimiter(new FixedWindowStrategy(100, 60000)));

@@ -7,6 +7,10 @@
     "stop": "./stop.sh",
     "restart": "./start.sh",
     "status": "./status.sh",
-    "test:rate-limit": "./test-ratelimit.sh"
+    "test:rate-limit": "./test-ratelimit.sh",
+    "test:lb": "node test/load-test.js",
+    "test:lb:stop": "pkill -f test/load-test.js || true",
+    "test:concurrent": "node test/concurrent-test.js",
+    "demo:lb": "echo \"Run npm run test:lb -- order 10 in one terminal, and node test/send-requests.js in another.\""
   }
 }

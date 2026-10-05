@@ -11,10 +11,20 @@ const app = express();
 app.use(helmet());
 app.use(express.json());
 
+app.use((req, res, next) => {
+  console.log(`[product-service][${process.env.SERVICE_INSTANCE_ID || 'default'}] ${req.method} ${req.originalUrl} requestId=${req.headers['x-request-id'] || 'unknown'}`);
+  next();
+});
+
 app.use('/products', productRoutes);
 
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'UP' });
+  res.status(200).json({
+    status: 'UP',
+    service: 'product-service',
+    instance: process.env.SERVICE_INSTANCE_ID || 'default',
+    port: process.env.PORT_PRODUCT || 3002
+  });
 });
 
 const PORT = process.env.PORT_PRODUCT || 3002;

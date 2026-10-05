@@ -17,12 +17,22 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(passport.initialize());
 
+app.use((req, res, next) => {
+  console.log(`[user-service][${process.env.SERVICE_INSTANCE_ID || 'default'}] ${req.method} ${req.originalUrl} requestId=${req.headers['x-request-id'] || 'unknown'}`);
+  next();
+});
+
 app.use('/auth', authRoutes);
 app.use('/auth', oauthRoutes);
 app.use('/users', userRoutes);
 
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'UP' });
+  res.status(200).json({
+    status: 'UP',
+    service: 'user-service',
+    instance: process.env.SERVICE_INSTANCE_ID || 'default',
+    port: process.env.PORT_USER || 3001
+  });
 });
 
 const PORT = process.env.PORT_USER || 3001;

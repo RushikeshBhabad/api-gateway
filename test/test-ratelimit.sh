@@ -22,7 +22,7 @@ echo "🧪 TESTING TOKEN BUCKET LIMITER (/api/orders)"
 echo "Limit: Capacity 10, Refills 1 per second"
 echo "Note: We need a valid JWT token to hit orders, but rate limit triggers BEFORE auth middleware!"
 echo "============================================="
-for i in {1..12}; do
+for i in {1..50}; do
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/api/orders -H "Content-Type: application/json" -d '{}')
   
   if [ "$STATUS" == "429" ]; then
