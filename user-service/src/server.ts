@@ -31,11 +31,13 @@ app.get('/health', (req, res) => {
     status: 'UP',
     service: 'user-service',
     instance: process.env.SERVICE_INSTANCE_ID || 'default',
-    port: process.env.PORT_USER || 3001
+    port: process.env.PORT || process.env.PORT_USER || 3001
   });
 });
 
-const PORT = process.env.PORT_USER || 3001;
+import { registerWithGateway } from './registry/registerService';
+
+const PORT = process.env.PORT || process.env.PORT_USER || 3001;
 const MONGODB_URI = process.env.MONGODB_URI as string;
 
 mongoose.connect(MONGODB_URI)
@@ -43,6 +45,11 @@ mongoose.connect(MONGODB_URI)
     console.log('User Service connected to MongoDB');
     app.listen(PORT, () => {
       console.log(`User Service running on port ${PORT}`);
+      registerWithGateway({
+        serviceName: 'user-service',
+        port: PORT,
+        instanceId: process.env.SERVICE_INSTANCE_ID
+      });
     });
   })
   .catch((err) => {

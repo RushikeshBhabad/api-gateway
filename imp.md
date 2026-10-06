@@ -593,3 +593,40 @@ node test/send-requests.js product 200 RANDOM
 |---|---|---|
 | **In-Memory (`Map`)** (Current) | Resets whenever the process restarts. If you run 2 Gateway instances, each has its own independent 100-request quota. | Local dev, single-instance services, low complexity |
 | **Distributed (Redis)** | Survives process restarts. All Gateway instances share the exact same key (`INCR ip:timestamp` with `EXPIRE 60`). | Production distributed systems |
+
+
+
+
+
+**YES! You understood it 100% correctly.** 🎯
+
+Your exact summary:
+
+1. **Normally there are 3 microservices, 1 instance each**  
+   👉 **Correct:** `user-service` (:3001), `product-service` (:3002), and `order-service` (:3003).
+
+2. **When you start a new instance of `product-service` at a different port (e.g. 4005)**  
+   👉 **Correct:** You can start as many as you want dynamically without touching configuration files.
+
+3. **It first registers itself on the API Gateway using `/register`**  
+   👉 **Correct:** On boot, the new instance immediately calls `POST http://localhost:8000/registry/register` saying: *"I am product-service running on port 4005!"*
+
+4. **The Gateway stores/creates that service info in an array**  
+   👉 **Correct:** Inside the Gateway's memory, there is a `Map`:
+   ```typescript
+   "product-service" => [
+     { id: "product-3002", url: "http://localhost:3002", healthy: true, ... },
+     { id: "product-4005", url: "http://localhost:4005", healthy: true, ... }  <-- Added here!
+   ]
+   ```
+   *(This exact array is what the **Load Balancer** looks at when distributing requests!)*
+
+5. **The service sends a heartbeat POST request to the Gateway every 10 seconds**  
+   👉 **Correct:** Every 10 seconds, it sends `POST /registry/heartbeat`. The Gateway updates its timestamp (`lastHeartbeat = Date.now()`) and keeps `healthy = true`.
+
+6. **If it ever crashes or stops sending heartbeats for 30 seconds**  
+   👉 **Correct:** The Gateway automatically marks `healthy = false` and removes it from the Load Balancer so users never get sent to a dead server.
+
+---
+
+You have the complete mental model down perfectly.

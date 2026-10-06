@@ -23,11 +23,13 @@ app.get('/health', (req, res) => {
     status: 'UP',
     service: 'order-service',
     instance: process.env.SERVICE_INSTANCE_ID || 'default',
-    port: process.env.PORT_ORDER || 3003
+    port: process.env.PORT || process.env.PORT_ORDER || 3003
   });
 });
 
-const PORT = process.env.PORT_ORDER || 3003;
+import { registerWithGateway } from './registry/registerService';
+
+const PORT = process.env.PORT || process.env.PORT_ORDER || 3003;
 const MONGODB_URI = process.env.MONGODB_URI as string;
 
 mongoose.connect(MONGODB_URI)
@@ -35,6 +37,11 @@ mongoose.connect(MONGODB_URI)
     console.log('Order Service connected to MongoDB');
     app.listen(PORT, () => {
       console.log(`Order Service running on port ${PORT}`);
+      registerWithGateway({
+        serviceName: 'order-service',
+        port: PORT,
+        instanceId: process.env.SERVICE_INSTANCE_ID
+      });
     });
   })
   .catch((err) => {

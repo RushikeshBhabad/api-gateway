@@ -1,11 +1,10 @@
 import { Application } from 'express';
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 import { LoadBalancerFactory } from '../loadbalance/LoadBalancerFactory';
-import { ServiceRegistry } from '../loadbalance/ServiceRegistry';
+import { serviceRegistry } from '../loadbalance/ServiceRegistry';
 import { circuitBreakerRegistry } from '../circuitbreaker/CircuitBreakerRegistry';
 
 export const setupProxies = (app: Application) => {
-  const serviceRegistry = new ServiceRegistry();
   serviceRegistry.startHealthChecks();
   const lbStrategy = LoadBalancerFactory.create();
 
