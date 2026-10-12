@@ -5,6 +5,7 @@ import { serviceRegistry } from '../loadbalance/ServiceRegistry';
 import { circuitBreakerRegistry } from '../circuitbreaker/CircuitBreakerRegistry';
 
 export const setupProxies = (app: Application) => {
+   // 1. Instantiates the configured strategy (ROUND_ROBIN, RANDOM, etc.)
   serviceRegistry.startHealthChecks();
   const lbStrategy = LoadBalancerFactory.create();
 
@@ -13,9 +14,13 @@ export const setupProxies = (app: Application) => {
       target: 'http://placeholder-target', // Will be overridden by router
       changeOrigin: true,
       router: (req) => {
+        // 2. Fetches registered, healthy instances
         const instances = serviceRegistry.getInstances(serviceName);
         if (instances.length === 0) {
-          throw new Error(`No healthy instances available for ${serviceName}`);
+          const err: any = new Error(`No healthy instances available for ${serviceName}`);
+          err.status = 503;
+          err.code = 'SERVICE_UNAVAILABLE';
+          throw err;
         }
         
         const context = {
@@ -25,6 +30,7 @@ export const setupProxies = (app: Application) => {
           requestPath: req.originalUrl,
         };
 
+        // 3. Load Balancer selects which instance gets the request
         const selectedInstance = lbStrategy.selectInstance(serviceName, instances, context);
         
         if (circuitBreakerRegistry.isEnabled()) {
@@ -37,6 +43,7 @@ export const setupProxies = (app: Application) => {
         (req as any)._lbService = serviceName;
         (req as any)._lbInstance = selectedInstance;
 
+        // 4. Returns chosen instance URL to route the HTTP request
         return selectedInstance.url;
       },
       pathRewrite: defaultPathRewrite,
@@ -88,7 +95,14 @@ export const setupProxies = (app: Application) => {
           console.error(`[Proxy Error] ${serviceName} / ${instance?.url || 'unknown'} : ${err.message}`);
           
           if (!res.headersSent) {
-            (res as any).status(502).json({ error: 'Bad Gateway or Service Unavailable' });
+            (res as any).status(502).json({
+              success: false,
+              error: {
+                code: 'BAD_GATEWAY',
+                message: `Bad Gateway: Unable to reach upstream ${serviceName} (${instance?.url || 'unknown'})`
+              },
+              requestId: (req as any).headers?.['x-request-id']
+            });
           }
         }
       }

@@ -7,7 +7,8 @@ const productSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   stock: { type: Number, required: true },
   description: { type: String, default: '' },
-  image: { type: String, default: '' }
+  image: { type: String, default: '' },
+  reconciledTasks: { type: [String], default: [] }
 }, { timestamps: true });
 
 productSchema.index({ title: 'text', author: 'text', category: 'text' });

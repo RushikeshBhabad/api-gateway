@@ -34,7 +34,7 @@ export class ServiceRegistry {
 
     for (const [name, config] of Object.entries(serviceConfigs)) {
       const instancesEnv = process.env[config.envKey];
-      if (instancesEnv) {
+      if (instancesEnv !== undefined) {
         this.services.set(name, parseInstanceConfig(name, instancesEnv));
       } else {
         this.services.set(name, parseInstanceConfig(name, config.fallbackUrl));

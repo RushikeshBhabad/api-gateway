@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { randomUUID } from 'crypto';
 import Order from '../models/Order';
 import axios from 'axios';
 
@@ -24,6 +25,8 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       return;
   }
 
+  const reservedItems: Array<{ productId: string; quantity: number; reservationId?: string }> = [];
+
   try {
     let totalAmount = 0;
     const finalItems = [];
@@ -32,7 +35,18 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       const prodRes = await axios.get(`${PRODUCT_SERVICE_URL}/${item.productId}`);
       const product = prodRes.data.data;
 
-      await axios.put(`${PRODUCT_SERVICE_URL}/${item.productId}/reserve`, { quantity: item.quantity });
+      // Pre-generate reservationId so that if network drops mid-call, compensation knows the ID
+      const reservationId = randomUUID();
+      reservedItems.push({
+        productId: item.productId,
+        quantity: item.quantity,
+        reservationId
+      });
+
+      await axios.put(`${PRODUCT_SERVICE_URL}/${item.productId}/reserve`, {
+        quantity: item.quantity,
+        reservationId
+      });
 
       totalAmount += product.price * item.quantity;
       finalItems.push({
@@ -51,6 +65,22 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
 
     res.status(201).json({ success: true, data: order });
   } catch (error: any) {
+    // Compensation: If any items were reserved but order creation failed, release the reserved stock
+    if (reservedItems.length > 0) {
+      console.warn(`[order-service] Order creation failed; initiating compensation for ${reservedItems.length} reserved item(s)...`);
+      for (const reserved of reservedItems) {
+        try {
+          await axios.put(`${PRODUCT_SERVICE_URL}/${reserved.productId}/release`, {
+            quantity: reserved.quantity,
+            reservationId: reserved.reservationId
+          });
+          console.log(`[order-service] Successfully compensated stock for product ${reserved.productId}`);
+        } catch (compErr: any) {
+          console.error(`[order-service] CRITICAL: Failed to compensate stock for product ${reserved.productId}:`, compErr.message);
+        }
+      }
+    }
+
     if (error.response) {
        res.status(error.response.status).json(error.response.data);
        return;

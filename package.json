@@ -14,6 +14,14 @@
     "test:circuit": "node test/circuit-breaker-test.js",
     "test:circuit-unit": "node test/circuit-breaker-unit.js",
     "test:discovery": "node test/service-discovery-test.js",
+    "test:lock-unit": "node test/redis-lock-unit.js",
+    "test:lock-integration": "node test/redis-lock-integration.js",
+    "test:lock": "node test/redis-lock-unit.js && node test/redis-lock-integration.js",
     "demo:lb": "echo \"Run npm run test:lb -- order 10 in one terminal, and node test/send-requests.js in another.\""
+  },
+  "dependencies": {
+    "@types/uuid": "^10.0.0",
+    "ioredis": "^6.0.0",
+    "uuid": "^14.0.3"
   }
 }

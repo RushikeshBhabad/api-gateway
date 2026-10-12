@@ -22,12 +22,15 @@ export interface ServiceInstance {
  * @returns An array of ServiceInstance objects.
  */
 export function parseInstanceConfig(serviceName: string, config: string): ServiceInstance[] {
-  if (!config) {
+  if (!config || !config.trim()) {
     return [];
   }
 
-  return config.split(',').map((urlStr) => {
-    const trimmed = urlStr.trim();
+  return config
+    .split(',')
+    .map((urlStr) => urlStr.trim())
+    .filter(Boolean)
+    .map((trimmed) => {
     
     // Default protocol fallback
     const protocolMatch = trimmed.match(/^(https?:\/\/)/);
