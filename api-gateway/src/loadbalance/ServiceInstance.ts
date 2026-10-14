@@ -34,20 +34,20 @@ export function parseInstanceConfig(serviceName: string, config: string): Servic
     
     // Default protocol fallback
     const protocolMatch = trimmed.match(/^(https?:\/\/)/);
-    const protocol = protocolMatch ? protocolMatch[1] : 'http://';
-    const rest = protocolMatch ? trimmed.slice(protocolMatch[1].length) : trimmed;
+    const protocol = protocolMatch && protocolMatch[1] ? protocolMatch[1] : 'http://';
+    const rest = protocolMatch ? trimmed.slice(protocolMatch[0].length) : trimmed;
     
     // Split the remaining host:port:weight
     const parts = rest.split(':');
-    const host = parts[0];
+    const host = parts[0] || 'localhost';
     let port = 80;
     let weight = 1;
 
-    if (parts.length === 2) {
+    if (parts.length === 2 && parts[1]) {
       port = parseInt(parts[1], 10);
     } else if (parts.length === 3) {
-      port = parseInt(parts[1], 10);
-      weight = parseInt(parts[2], 10);
+      if (parts[1]) port = parseInt(parts[1], 10);
+      if (parts[2]) weight = parseInt(parts[2], 10);
     }
 
     const validPort = isNaN(port) ? 80 : port;

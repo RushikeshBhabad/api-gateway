@@ -2,6 +2,21 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+try {
+  const envContent = fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8');
+  for (const line of envContent.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const idx = trimmed.indexOf('=');
+      if (idx > 0) {
+        const k = trimmed.substring(0, idx).trim();
+        const v = trimmed.substring(idx + 1).trim();
+        if (!process.env[k]) process.env[k] = v;
+      }
+    }
+  }
+} catch {}
+
 const processes = [];
 
 function startServiceInstance(serviceName, port, instanceId, strategy) {

@@ -25,12 +25,36 @@ export class JWTAuthentication implements AuthenticationStrategy {
     }
     
     const token = authHeader.split(' ')[1];
+    if (!token) {
+      return null;
+    }
     try {
-      const secret = process.env.JWT_SECRET || 'super_secret_jwt_key_for_this_project_123';
-      const decoded = jwt.verify(token, secret) as any;
+      const secret = process.env.JWT_SECRET;
+      if (!secret || !secret.trim()) {
+        console.error('JWT Verification Error in Gateway: JWT_SECRET environment variable is required and must not be empty.');
+        return null;
+      }
+      // Restrict explicitly to HMAC-SHA256 (prevents algorithm confusion attacks e.g. "none" or asymmetric keys)
+      const decoded = jwt.verify(token, secret.trim(), {
+        algorithms: ['HS256']
+      }) as any;
+
+      // Validate presence and types of required claims
+      if (
+        !decoded ||
+        typeof decoded !== 'object' ||
+        typeof decoded.sub !== 'string' ||
+        !decoded.sub.trim() ||
+        typeof decoded.role !== 'string' ||
+        !decoded.role.trim()
+      ) {
+        console.error('JWT Verification Error in Gateway: Token is missing required claims (sub, role).');
+        return null;
+      }
+
       return {
-        userId: decoded.sub,
-        role: decoded.role
+        userId: decoded.sub.trim(),
+        role: decoded.role.trim()
       };
     } catch (err: any) {
       console.error('JWT Verification Error in Gateway:', err.message);

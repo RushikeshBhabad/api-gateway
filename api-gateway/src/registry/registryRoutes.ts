@@ -1,15 +1,25 @@
 import { Router, Request, Response } from 'express';
 import express from 'express';
 import { serviceRegistry } from '../loadbalance/ServiceRegistry';
+import { registryAuthMiddleware } from './registrySecurity';
+import {
+  validateRegistrationPayload,
+  validateServiceName,
+  validateInstanceId
+} from './registryValidation';
 
 export const registryRouter = Router();
 
 // Ensure body parser is applied specifically for registry endpoints
 registryRouter.use(express.json());
 
+// Protect ALL registry endpoints (mutations and inspection) with timing-safe authentication
+registryRouter.use(registryAuthMiddleware);
+
 /**
  * GET /registry
  * Query all registered services, their instances, and health status.
+ * Protected: Exposes sensitive internal cluster topology.
  */
 registryRouter.get('/', (req: Request, res: Response) => {
   const allServices = serviceRegistry.getAllServices();
@@ -33,33 +43,26 @@ registryRouter.get('/', (req: Request, res: Response) => {
 /**
  * POST /registry/register
  * Service self-registration endpoint called when a service boots up.
+ * Authenticated and validated against SSRF, rogue service identities, and invalid ports.
  */
 registryRouter.post('/register', (req: Request, res: Response) => {
-  const { serviceName, port, host, id, weight, url } = req.body || {};
-
-  if (!serviceName || !port) {
+  const validation = validateRegistrationPayload(req.body);
+  if (!validation.valid || !validation.value) {
     res.status(400).json({
       success: false,
-      error: 'Missing required fields: serviceName and port are required.'
+      error: validation.error
     });
     return;
   }
 
-  const parsedPort = Number(port);
-  if (isNaN(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
-    res.status(400).json({
-      success: false,
-      error: 'Invalid port number.'
-    });
-    return;
-  }
+  const { serviceName, port, host, id, weight, url } = validation.value;
 
   const instance = serviceRegistry.registerInstance({
     serviceName,
-    port: parsedPort,
-    host: host || req.hostname || 'localhost',
+    port,
+    host,
     id,
-    weight: weight ? Number(weight) : 1,
+    weight,
     url
   });
 
@@ -76,17 +79,24 @@ registryRouter.post('/register', (req: Request, res: Response) => {
  */
 registryRouter.post('/heartbeat', (req: Request, res: Response) => {
   const { serviceName, instanceId, id } = req.body || {};
-  const targetId = instanceId || id;
+  const rawId = instanceId || id;
 
-  if (!serviceName || !targetId) {
-    res.status(400).json({
-      success: false,
-      error: 'Missing required fields: serviceName and instanceId are required.'
-    });
+  const serviceValidation = validateServiceName(serviceName);
+  if (!serviceValidation.valid || !serviceValidation.value) {
+    res.status(400).json({ success: false, error: serviceValidation.error });
     return;
   }
 
-  const acknowledged = serviceRegistry.recordHeartbeat(serviceName, targetId);
+  const idValidation = validateInstanceId(rawId, '');
+  if (!idValidation.valid || !idValidation.value) {
+    res.status(400).json({ success: false, error: idValidation.error || 'instanceId is required.' });
+    return;
+  }
+
+  const validServiceName = serviceValidation.value;
+  const validId = idValidation.value;
+
+  const acknowledged = serviceRegistry.recordHeartbeat(validServiceName, validId);
 
   if (!acknowledged) {
     res.status(404).json({
@@ -99,7 +109,7 @@ registryRouter.post('/heartbeat', (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     message: 'Heartbeat acknowledged',
-    instanceId: targetId
+    instanceId: validId
   });
 });
 
@@ -109,23 +119,30 @@ registryRouter.post('/heartbeat', (req: Request, res: Response) => {
  */
 registryRouter.post('/unregister', (req: Request, res: Response) => {
   const { serviceName, instanceId, id } = req.body || {};
-  const targetId = instanceId || id;
+  const rawId = instanceId || id;
 
-  if (!serviceName || !targetId) {
-    res.status(400).json({
-      success: false,
-      error: 'Missing required fields: serviceName and instanceId are required.'
-    });
+  const serviceValidation = validateServiceName(serviceName);
+  if (!serviceValidation.valid || !serviceValidation.value) {
+    res.status(400).json({ success: false, error: serviceValidation.error });
     return;
   }
 
-  const unregistered = serviceRegistry.unregisterInstance(serviceName, targetId);
+  const idValidation = validateInstanceId(rawId, '');
+  if (!idValidation.valid || !idValidation.value) {
+    res.status(400).json({ success: false, error: idValidation.error || 'instanceId is required.' });
+    return;
+  }
+
+  const validServiceName = serviceValidation.value;
+  const validId = idValidation.value;
+
+  const unregistered = serviceRegistry.unregisterInstance(validServiceName, validId);
 
   res.status(200).json({
     success: true,
     message: unregistered
-      ? `Instance ${targetId} unregistered successfully`
-      : `Instance ${targetId} was not found (already removed)`
+      ? `Instance ${validId} unregistered successfully`
+      : `Instance ${validId} was not found (already removed)`
   });
 });
 
@@ -136,18 +153,27 @@ registryRouter.post('/unregister', (req: Request, res: Response) => {
 registryRouter.delete('/:serviceName/:instanceId', (req: Request, res: Response) => {
   const { serviceName, instanceId } = req.params;
 
-  if (!serviceName || !instanceId) {
-    res.status(400).json({ success: false, error: 'serviceName and instanceId params required' });
+  const serviceValidation = validateServiceName(serviceName);
+  if (!serviceValidation.valid || !serviceValidation.value) {
+    res.status(400).json({ success: false, error: serviceValidation.error });
     return;
   }
 
-  const unregistered = serviceRegistry.unregisterInstance(serviceName, instanceId);
+  const idValidation = validateInstanceId(instanceId, '');
+  if (!idValidation.valid || !idValidation.value) {
+    res.status(400).json({ success: false, error: idValidation.error || 'instanceId is required.' });
+    return;
+  }
+
+  const validServiceName = serviceValidation.value;
+  const validId = idValidation.value;
+
+  const unregistered = serviceRegistry.unregisterInstance(validServiceName, validId);
 
   res.status(200).json({
     success: true,
     message: unregistered
-      ? `Instance ${instanceId} unregistered successfully`
-      : `Instance ${instanceId} was not found`
+      ? `Instance ${validId} unregistered successfully`
+      : `Instance ${validId} was not found`
   });
 });
-

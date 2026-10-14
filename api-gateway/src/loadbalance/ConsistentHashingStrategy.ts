@@ -113,7 +113,8 @@ export class ConsistentHashingStrategy implements LoadBalancerStrategy {
     // Binary search for the first node with hash >= request hash
     while (low <= high) {
       const mid = Math.floor((low + high) / 2);
-      if (ring[mid].hash >= hash) {
+      const midNode = ring[mid];
+      if (midNode && midNode.hash >= hash) {
         index = mid;
         high = mid - 1;
       } else {
@@ -126,7 +127,11 @@ export class ConsistentHashingStrategy implements LoadBalancerStrategy {
       index = 0;
     }
 
-    return ring[index].instance;
+    const matchedNode = ring[index] ?? ring[0];
+    if (!matchedNode) {
+      throw new Error('Hash ring is empty');
+    }
+    return matchedNode.instance;
   }
 
   /**

@@ -28,11 +28,11 @@ export class LeastConnectionsStrategy implements LoadBalancerStrategy {
       throw new Error(`No available instances for service: ${serviceName}`);
     }
 
-    let selectedInstance = instances[0];
+    let selectedInstance = instances[0]!;
     let minConnections = selectedInstance.activeConnections || 0;
 
     for (let i = 1; i < instances.length; i++) {
-      const instance = instances[i];
+      const instance = instances[i]!;
       const connections = instance.activeConnections || 0;
       if (connections < minConnections) {
         minConnections = connections;

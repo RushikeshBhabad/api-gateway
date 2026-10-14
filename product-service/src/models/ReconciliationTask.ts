@@ -8,13 +8,13 @@ export interface IReconciliationTask {
   action: 'RESTORE_STOCK';
   reason: string;
   status: 'PENDING' | 'PROCESSING' | 'RESOLVED' | 'FAILED';
-  errorDetails?: string;
-  lockedAt?: Date;
-  lockedBy?: string;
-  attempts?: number;
-  resolvedAt?: Date;
-  createdAt?: Date;
-  updatedAt?: Date;
+  errorDetails?: string | undefined;
+  lockedAt?: Date | undefined;
+  lockedBy?: string | undefined;
+  attempts?: number | undefined;
+  resolvedAt?: Date | undefined;
+  createdAt?: Date | undefined;
+  updatedAt?: Date | undefined;
 }
 
 const reconciliationTaskSchema = new mongoose.Schema(

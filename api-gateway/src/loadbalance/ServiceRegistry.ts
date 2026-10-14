@@ -1,5 +1,6 @@
 import { ServiceInstance, parseInstanceConfig } from './ServiceInstance';
 import { circuitBreakerRegistry } from '../circuitbreaker/CircuitBreakerRegistry';
+import { ALLOWED_SERVICES } from '../registry/registryValidation';
 
 export interface RegisterInstanceOptions {
   serviceName: string;
@@ -16,7 +17,7 @@ export interface RegisterInstanceOptions {
  */
 export class ServiceRegistry {
   private services = new Map<string, ServiceInstance[]>();
-  private healthCheckInterval?: NodeJS.Timeout;
+  private healthCheckInterval?: NodeJS.Timeout | undefined;
 
   constructor() {
     this.loadFromEnv();
@@ -48,6 +49,11 @@ export class ServiceRegistry {
    */
   registerInstance(options: RegisterInstanceOptions): ServiceInstance {
     const { serviceName, port } = options;
+
+    if (!ALLOWED_SERVICES.includes(serviceName as any)) {
+      throw new Error(`Cannot register unknown service '${serviceName}'. Allowed: ${ALLOWED_SERVICES.join(', ')}`);
+    }
+
     const host = options.host || 'localhost';
     const weight = options.weight ?? 1;
     const url = options.url || `http://${host}:${port}`;

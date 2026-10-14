@@ -23,11 +23,12 @@ export const setupProxies = (app: Application) => {
           throw err;
         }
         
+        const reqAny = req as any;
         const context = {
-          req,
-          clientIp: req.ip || req.socket.remoteAddress,
-          userId: (req as any).user?.id, // Assuming authMiddleware sets req.user
-          requestPath: req.originalUrl,
+          req: reqAny,
+          clientIp: reqAny.ip || reqAny.socket?.remoteAddress,
+          userId: reqAny.user?.id, // Assuming authMiddleware sets req.user
+          requestPath: reqAny.originalUrl || req.url,
         };
 
         // 3. Load Balancer selects which instance gets the request
@@ -94,7 +95,8 @@ export const setupProxies = (app: Application) => {
           
           console.error(`[Proxy Error] ${serviceName} / ${instance?.url || 'unknown'} : ${err.message}`);
           
-          if (!res.headersSent) {
+          const resAny = res as any;
+          if (!resAny.headersSent) {
             (res as any).status(502).json({
               success: false,
               error: {

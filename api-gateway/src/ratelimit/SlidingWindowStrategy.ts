@@ -26,7 +26,7 @@ export class SlidingWindowStrategy implements RateLimiterStrategy {
     }
     
     this.logs.set(key, timestamps);
-    const oldestTimestamp = timestamps[0];
+    const oldestTimestamp = timestamps[0] ?? windowStart;
     const retryAfterMs = this.windowMs - (now - oldestTimestamp);
     
     return { allowed: false, remaining: 0, retryAfterMs };

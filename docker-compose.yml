@@ -11,7 +11,8 @@ services:
       - USER_SERVICE_URL=http://user-service:3001
       - PRODUCT_SERVICE_URL=http://product-service:3002
       - ORDER_SERVICE_URL=http://order-service:3003
-      - JWT_SECRET=super_secret_jwt_key_for_this_project_123
+      - JWT_SECRET=${JWT_SECRET}
+      - SERVICE_REGISTRY_TOKEN=${SERVICE_REGISTRY_TOKEN}
     depends_on:
       - user-service
       - product-service
@@ -25,8 +26,9 @@ services:
     environment:
       - PORT_USER=3001
       - MONGODB_URI=${MONGODB_URI}
-      - JWT_SECRET=super_secret_jwt_key_for_this_project_123
-      - REFRESH_TOKEN_SECRET=super_secret_refresh_key_123
+      - JWT_SECRET=${JWT_SECRET}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET}
+      - SERVICE_REGISTRY_TOKEN=${SERVICE_REGISTRY_TOKEN}
 
   product-service:
     build:
@@ -36,6 +38,7 @@ services:
     environment:
       - PORT_PRODUCT=3002
       - MONGODB_URI=${MONGODB_URI}
+      - SERVICE_REGISTRY_TOKEN=${SERVICE_REGISTRY_TOKEN}
 
   order-service:
     build:
@@ -46,6 +49,7 @@ services:
       - PORT_ORDER=3003
       - MONGODB_URI=${MONGODB_URI}
       - PRODUCT_SERVICE_URL=http://product-service:3002
+      - SERVICE_REGISTRY_TOKEN=${SERVICE_REGISTRY_TOKEN}
 
   frontend:
     build:

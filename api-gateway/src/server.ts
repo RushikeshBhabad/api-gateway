@@ -6,8 +6,14 @@ import cookieParser from 'cookie-parser';
 import { v4 as uuidv4 } from 'uuid';
 import { setupProxies } from './proxy';
 import { authMiddleware } from './middleware/authMiddleware';
+import { validateJwtSecret } from './config/jwtConfig';
+import { getRegistryToken } from './registry/registrySecurity';
 
 dotenv.config({ path: '../.env' });
+
+// Fail fast on startup if required security configuration is missing or empty
+validateJwtSecret();
+getRegistryToken();
 
 const app = express();
 

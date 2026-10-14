@@ -7,8 +7,12 @@ import userRoutes from './routes/userRoutes';
 import oauthRoutes from './routes/oauthRoutes';
 import cookieParser from 'cookie-parser';
 import passport from './config/passport';
+import { validateJwtSecret } from './config/jwtConfig';
 
 dotenv.config({ path: '../.env' });
+
+// Fail fast on startup if required JWT configuration is missing or empty
+validateJwtSecret();
 
 const app = express();
 

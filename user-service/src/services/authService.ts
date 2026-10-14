@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
+import { validateJwtSecret } from '../config/jwtConfig';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
@@ -92,8 +93,11 @@ export const logout = async (refreshToken: string) => {
  * @returns An object containing the JWT access token and plain text refresh token.
  */
 export const generateTokens = async (userId: string, role: string) => {
-  const secret = process.env.JWT_SECRET || 'super_secret_jwt_key_for_this_project_123';
-  const accessToken = jwt.sign({ sub: userId, role }, secret, { expiresIn: ACCESS_TOKEN_EXP });
+  const secret = validateJwtSecret();
+  const accessToken = jwt.sign({ sub: userId, role }, secret, {
+    expiresIn: ACCESS_TOKEN_EXP,
+    algorithm: 'HS256'
+  });
   
   const rawRefreshToken = crypto.randomBytes(32).toString('hex');
   const hash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');

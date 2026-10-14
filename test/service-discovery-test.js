@@ -1,7 +1,24 @@
 const http = require('http');
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
+try {
+  const envContent = fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8');
+  for (const line of envContent.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const idx = trimmed.indexOf('=');
+      if (idx > 0) {
+        const k = trimmed.substring(0, idx).trim();
+        const v = trimmed.substring(idx + 1).trim();
+        if (!process.env[k]) process.env[k] = v;
+      }
+    }
+  }
+} catch {}
+
+const REGISTRY_TOKEN = process.env.SERVICE_REGISTRY_TOKEN || 'service_registry_secret_token_bookstore_2026';
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const processes = [];
 
@@ -35,9 +52,20 @@ function stopAll() {
 process.on('SIGINT', () => { stopAll(); process.exit(0); });
 process.on('SIGTERM', () => { stopAll(); process.exit(0); });
 
-async function httpGet(url) {
+async function httpGet(url, customHeaders = {}) {
   return new Promise((resolve) => {
-    http.get(url, (res) => {
+    const urlObj = new URL(url);
+    const headers = { ...customHeaders };
+    if (urlObj.pathname.startsWith('/registry') && !headers['x-registry-token'] && !headers['authorization']) {
+      headers['x-registry-token'] = REGISTRY_TOKEN;
+    }
+    const options = {
+      hostname: urlObj.hostname,
+      port: urlObj.port,
+      path: urlObj.pathname + urlObj.search,
+      headers
+    };
+    http.get(options, (res) => {
       let data = '';
       const upstream = res.headers['x-upstream-instance'] || 'none';
       const strategy = res.headers['x-lb-strategy'] || 'none';
@@ -66,6 +94,8 @@ async function main() {
       PORT_GATEWAY: '8000',
       LOAD_BALANCER_STRATEGY: 'ROUND_ROBIN',
       PRODUCT_SERVICE_INSTANCES: '', // Intentionally empty to prove discovery
+      JWT_SECRET: process.env.JWT_SECRET || 'super_secret_jwt_key_for_this_project_123',
+      SERVICE_REGISTRY_TOKEN: REGISTRY_TOKEN
     }, 'gateway');
 
     await delay(3000);
@@ -83,19 +113,25 @@ async function main() {
     const p1 = startProcess('npx', ['tsx', 'src/server.ts'], productDir, {
       PORT: '4001',
       PORT_PRODUCT: '4001',
-      SERVICE_INSTANCE_ID: 'product-dynamic-4001'
+      SERVICE_INSTANCE_ID: 'product-dynamic-4001',
+      JWT_SECRET: process.env.JWT_SECRET || 'super_secret_jwt_key_for_this_project_123',
+      SERVICE_REGISTRY_TOKEN: REGISTRY_TOKEN
     }, 'instance-4001');
 
     const p2 = startProcess('npx', ['tsx', 'src/server.ts'], productDir, {
       PORT: '4002',
       PORT_PRODUCT: '4002',
-      SERVICE_INSTANCE_ID: 'product-dynamic-4002'
+      SERVICE_INSTANCE_ID: 'product-dynamic-4002',
+      JWT_SECRET: process.env.JWT_SECRET || 'super_secret_jwt_key_for_this_project_123',
+      SERVICE_REGISTRY_TOKEN: REGISTRY_TOKEN
     }, 'instance-4002');
 
     const p3 = startProcess('npx', ['tsx', 'src/server.ts'], productDir, {
       PORT: '4003',
       PORT_PRODUCT: '4003',
-      SERVICE_INSTANCE_ID: 'product-dynamic-4003'
+      SERVICE_INSTANCE_ID: 'product-dynamic-4003',
+      JWT_SECRET: process.env.JWT_SECRET || 'super_secret_jwt_key_for_this_project_123',
+      SERVICE_REGISTRY_TOKEN: REGISTRY_TOKEN
     }, 'instance-4003');
 
     console.log('   Waiting for services to self-register via POST /registry/register...');

@@ -35,7 +35,7 @@ export class RoundRobinStrategy implements LoadBalancerStrategy {
     }
 
     const counter = this.counters.get(serviceName) || 0;
-    const instance = instances[counter % instances.length];
+    const instance = instances[counter % instances.length]!;
     
     // Increment the counter and wrap around safely
     this.counters.set(serviceName, (counter + 1) % instances.length);

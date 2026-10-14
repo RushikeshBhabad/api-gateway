@@ -19,9 +19,9 @@ export interface ReconciliationReport {
 }
 
 export interface ReconcileOptions {
-  staleTimeoutMs?: number;
-  workerId?: string;
-  maxTasks?: number;
+  staleTimeoutMs?: number | undefined;
+  workerId?: string | undefined;
+  maxTasks?: number | undefined;
 }
 
 /**

@@ -17,6 +17,7 @@
     "test:lock-unit": "node test/redis-lock-unit.js",
     "test:lock-integration": "node test/redis-lock-integration.js",
     "test:lock": "node test/redis-lock-unit.js && node test/redis-lock-integration.js",
+    "test:security": "NODE_PATH=./api-gateway/node_modules:./user-service/node_modules npx tsx test/phase1-security-test.js",
     "demo:lb": "echo \"Run npm run test:lb -- order 10 in one terminal, and node test/send-requests.js in another.\""
   },
   "dependencies": {

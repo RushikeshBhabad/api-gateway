@@ -90,7 +90,7 @@ export const reserveStock = async (req: Request, res: Response): Promise<void> =
   const reservationId = req.body.reservationId || uuidv4();
 
   // 1. Validate inputs
-  if (!mongoose.Types.ObjectId.isValid(productId)) {
+  if (!productId || typeof productId !== 'string' || !mongoose.Types.ObjectId.isValid(productId)) {
     res.status(400).json({ success: false, error: { message: 'Invalid product ID' } });
     return;
   }
@@ -363,7 +363,7 @@ export const releaseStock = async (req: Request, res: Response): Promise<void> =
   const reservationId = req.body.reservationId;
 
   // 1. Validate inputs
-  if (!mongoose.Types.ObjectId.isValid(productId)) {
+  if (!productId || typeof productId !== 'string' || !mongoose.Types.ObjectId.isValid(productId)) {
     res.status(400).json({ success: false, error: { message: 'Invalid product ID' } });
     return;
   }

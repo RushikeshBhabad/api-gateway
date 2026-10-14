@@ -1,15 +1,17 @@
 export interface ServiceRegistrationOptions {
   serviceName: string;
   port: number | string;
-  host?: string;
-  instanceId?: string;
-  gatewayUrl?: string;
-  heartbeatIntervalMs?: number;
+  host?: string | undefined;
+  instanceId?: string | undefined;
+  gatewayUrl?: string | undefined;
+  heartbeatIntervalMs?: number | undefined;
+  registryToken?: string | undefined;
 }
 
 /**
  * Automatically registers this service instance with the API Gateway Service Registry,
  * maintains periodic heartbeats, and unregisters on process termination.
+ * Authenticates with the Gateway using a dedicated SERVICE_REGISTRY_TOKEN.
  */
 export function registerWithGateway(options: ServiceRegistrationOptions): { unregister: () => Promise<void> } {
   const gatewayUrl = options.gatewayUrl || process.env.GATEWAY_URL || 'http://localhost:8000';
@@ -17,12 +19,26 @@ export function registerWithGateway(options: ServiceRegistrationOptions): { unre
   const host = options.host || 'localhost';
   const instanceId = options.instanceId || `${options.serviceName}-${host}-${port}`;
   const intervalMs = options.heartbeatIntervalMs || 10000;
+  const token = (options.registryToken || process.env.SERVICE_REGISTRY_TOKEN || '').trim();
+
+  // Fail closed if registry credential is missing: do not silently omit credential
+  if (!token) {
+    console.error(`[Service Discovery] Missing required SERVICE_REGISTRY_TOKEN for ${options.serviceName} (${instanceId}). Registration aborted.`);
+    return {
+      unregister: async () => {}
+    };
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-registry-token': token
+  };
 
   async function register() {
     try {
       const res = await fetch(`${gatewayUrl}/registry/register`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           serviceName: options.serviceName,
           host,
@@ -33,6 +49,9 @@ export function registerWithGateway(options: ServiceRegistrationOptions): { unre
       });
       if (res.ok) {
         console.log(`[Service Discovery] Registered ${instanceId} with Gateway at ${gatewayUrl}`);
+      } else {
+        const text = await res.text();
+        console.error(`[Service Discovery] Registration failed (${res.status}): ${text}`);
       }
     } catch (err: any) {
       console.warn(`[Service Discovery] Could not reach Gateway at ${gatewayUrl} (${err.message}). Retrying on heartbeat...`);
@@ -47,7 +66,7 @@ export function registerWithGateway(options: ServiceRegistrationOptions): { unre
     try {
       const res = await fetch(`${gatewayUrl}/registry/heartbeat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           serviceName: options.serviceName,
           instanceId
@@ -57,6 +76,8 @@ export function registerWithGateway(options: ServiceRegistrationOptions): { unre
         // Gateway restarted and lost state; re-register!
         console.log(`[Service Discovery] Gateway requested re-registration for ${instanceId}`);
         await register();
+      } else if (res.status === 401 || res.status === 403) {
+        console.error(`[Service Discovery] Heartbeat authentication rejected (${res.status}) by Gateway at ${gatewayUrl}`);
       }
     } catch {
       // Gateway temporarily unreachable; keep running
@@ -69,7 +90,7 @@ export function registerWithGateway(options: ServiceRegistrationOptions): { unre
     try {
       await fetch(`${gatewayUrl}/registry/unregister`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           serviceName: options.serviceName,
           instanceId
@@ -90,4 +111,3 @@ export function registerWithGateway(options: ServiceRegistrationOptions): { unre
 
   return { unregister };
 }
-

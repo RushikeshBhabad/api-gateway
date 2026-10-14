@@ -10,12 +10,17 @@ passport.use(new GoogleStrategy({
   callbackURL: '/api/auth/google/callback'
 }, async (accessToken, refreshToken, profile, done) => {
   try {
-    let user = await User.findOne({ email: profile.emails?.[0].value });
+    const email = profile.emails && profile.emails[0] ? profile.emails[0].value : null;
+    if (!email) {
+      return done(new Error('Email is required from Google profile'), false);
+    }
+
+    let user: any = await User.findOne({ email });
     
     if (!user) {
       user = new User({
         name: profile.displayName,
-        email: profile.emails?.[0].value,
+        email,
         authProvider: 'GOOGLE',
         providerUserId: profile.id,
         role: 'USER'

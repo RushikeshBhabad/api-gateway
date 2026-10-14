@@ -28,6 +28,6 @@ export class RandomStrategy implements LoadBalancerStrategy {
     }
 
     const randomIndex = Math.floor(Math.random() * instances.length);
-    return instances[randomIndex];
+    return instances[randomIndex]!;
   }
 }
