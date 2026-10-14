@@ -61,6 +61,39 @@ Instead of the gateway relying on static files, the microservices **manage their
 
 ---
 
+
+
+
+### Service Registry 
+
+1. **Normally there are 3 microservices, 1 instance each**  
+   👉 **Correct:** `user-service` (:3001), `product-service` (:3002), and `order-service` (:3003).
+
+2. **When you start a new instance of `product-service` at a different port (e.g. 4005)**  
+   👉 **Correct:** You can start as many as you want dynamically without touching configuration files.
+
+3. **It first registers itself on the API Gateway using `/register`**  
+   👉 **Correct:** On boot, the new instance immediately calls `POST http://localhost:8000/registry/register` saying: *"I am product-service running on port 4005!"*
+
+4. **The Gateway stores/creates that service info in an array**  
+   👉 **Correct:** Inside the Gateway's memory, there is a `Map`:
+   ```typescript
+   "product-service" => [
+     { id: "product-3002", url: "http://localhost:3002", healthy: true, ... },
+     { id: "product-4005", url: "http://localhost:4005", healthy: true, ... }  <-- Added here!
+   ]
+   ```
+   *(This exact array is what the **Load Balancer** looks at when distributing requests!)*
+
+5. **The service sends a heartbeat POST request to the Gateway every 10 seconds**  
+   👉 **Correct:** Every 10 seconds, it sends `POST /registry/heartbeat`. The Gateway updates its timestamp (`lastHeartbeat = Date.now()`) and keeps `healthy = true`.
+
+6. **If it ever crashes or stops sending heartbeats for 30 seconds**  
+   👉 **Correct:** The Gateway automatically marks `healthy = false` and removes it from the Load Balancer so users never get sent to a dead server.
+
+---
+
+
 ## 3. How a Microservice Registers Itself When It Boots Up
 
 The bootup and self-registration lifecycle runs automatically whenever a microservice starts.
